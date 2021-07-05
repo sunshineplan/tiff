@@ -644,7 +644,6 @@ func Decode(r io.Reader) (img image.Image, err error) {
 		return nil, FormatError("inconsistent header")
 	}
 
-	nComponent := 3
 	imgRect := image.Rect(0, 0, d.config.Width, d.config.Height)
 	switch d.mode {
 	case mGray, mGrayInvert:
@@ -653,7 +652,6 @@ func Decode(r io.Reader) (img image.Image, err error) {
 		} else {
 			img = image.NewGray(imgRect)
 		}
-		nComponent = 1
 	case mPaletted:
 		img = image.NewPaletted(imgRect, d.palette)
 	case mNRGBA:
