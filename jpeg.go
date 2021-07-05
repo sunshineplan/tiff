@@ -6,8 +6,6 @@ import (
 	"io"
 )
 
-const sof0Marker = 0xc0
-const dqtMarker = 0xdb
 const dhtMarker = 0xc4
 const blockSize = 64
 const nQuantIndex = 2
@@ -113,97 +111,23 @@ var theHuffmanSpec = [nHuffIndex]huffmanSpec{
 	},
 }
 
-var sosHeaderY = []byte{
-	0xff, 0xda, 0x00, 0x08, 0x01, 0x01, 0x00, 0x00, 0x3f, 0x00,
-}
-
-var sosHeaderYCbCr = []byte{
-	0xff, 0xda, 0x00, 0x0c, 0x03, 0x01, 0x00, 0x02,
-	0x11, 0x03, 0x11, 0x00, 0x3f, 0x00,
-}
-
-func decodeJpegCompress(size image.Point, nComponent int, r io.Reader) io.Reader {
+func decodeJpegCompress(size image.Point, nComponent int, r io.ReaderAt, n int64) io.Reader {
 	var buf bytes.Buffer
 	// Write the Start Of Image marker.
-	buf.WriteByte(0xff)
-	buf.WriteByte(0xd8)
-	// Write the quantization tables.
-	writeDQT(100, &buf)
-	// Write the image dimensions.
-	writeSOF0(size, nComponent, &buf)
+	buf.Write([]byte{0xff, 0xd8})
 	// Write the Huffman tables.
 	writeDHT(nComponent, &buf)
-	// Write the StartOfScan marker header.
-	if nComponent == 1 {
-		buf.Write(sosHeaderY)
-	} else {
-		buf.Write(sosHeaderYCbCr)
-	}
 
-	return io.MultiReader(&buf, r, bytes.NewReader([]byte{0xff, 0xd9}))
+	return io.MultiReader(&buf, io.NewSectionReader(r, 2, n))
 }
 
 func writeMarkerHeader(marker uint8, markerlen int, w *bytes.Buffer) {
-	var buf []byte
+	buf := make([]byte, 4)
 	buf[0] = 0xff
 	buf[1] = marker
 	buf[2] = uint8(markerlen >> 8)
 	buf[3] = uint8(markerlen & 0xff)
 	w.Write(buf[:4])
-}
-
-func writeDQT(quality int, w *bytes.Buffer) {
-	var scale int
-	if quality < 50 {
-		scale = 5000 / quality
-	} else {
-		scale = 200 - quality*2
-	}
-	var quant [nQuantIndex][blockSize]byte
-	for i := range quant {
-		for j := range quant[i] {
-			x := int(unscaledQuant[i][j])
-			x = (x*scale + 50) / 100
-			if x < 1 {
-				x = 1
-			} else if x > 255 {
-				x = 255
-			}
-			quant[i][j] = uint8(x)
-		}
-	}
-	const markerlen = 2 + int(nQuantIndex)*(1+blockSize)
-	writeMarkerHeader(dqtMarker, markerlen, w)
-	for i := range quant {
-		w.WriteByte(uint8(i))
-		w.Write(quant[i][:])
-	}
-}
-
-func writeSOF0(size image.Point, nComponent int, w *bytes.Buffer) {
-	markerlen := 8 + 3*nComponent
-	writeMarkerHeader(sof0Marker, markerlen, w)
-	var buf []byte
-	buf[0] = 8 // 8-bit color.
-	buf[1] = uint8(size.Y >> 8)
-	buf[2] = uint8(size.Y & 0xff)
-	buf[3] = uint8(size.X >> 8)
-	buf[4] = uint8(size.X & 0xff)
-	buf[5] = uint8(nComponent)
-	if nComponent == 1 {
-		buf[6] = 1
-		// No subsampling for grayscale image.
-		buf[7] = 0x11
-		buf[8] = 0x00
-	} else {
-		for i := 0; i < nComponent; i++ {
-			buf[3*i+6] = uint8(i + 1)
-			// We use 4:2:0 chroma subsampling.
-			buf[3*i+7] = "\x22\x11\x11"[i]
-			buf[3*i+8] = "\x00\x01\x01"[i]
-		}
-	}
-	w.Write(buf[:3*(nComponent-1)+9])
 }
 
 func writeDHT(nComponent int, w *bytes.Buffer) {
