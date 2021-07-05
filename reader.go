@@ -704,7 +704,7 @@ func Decode(r io.Reader) (img image.Image, err error) {
 				d.buf, err = ioutil.ReadAll(r)
 				r.Close()
 			case cJPEG:
-				r := decodeJpegCompress(imgRect.Size(), nComponent, io.NewSectionReader(d.r, offset, n), n)
+				r := newJpegReader(nComponent, io.NewSectionReader(d.r, offset, n), n)
 				img, err = jpeg.Decode(r)
 				if err != nil {
 					return nil, err

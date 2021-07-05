@@ -2,7 +2,6 @@ package tiff
 
 import (
 	"bytes"
-	"image"
 	"io"
 )
 
@@ -111,7 +110,7 @@ var theHuffmanSpec = [nHuffIndex]huffmanSpec{
 	},
 }
 
-func decodeJpegCompress(size image.Point, nComponent int, r io.ReaderAt, n int64) io.Reader {
+func newJpegReader(nComponent int, r io.ReaderAt, n int64) io.Reader {
 	var buf bytes.Buffer
 	// Write the Start Of Image marker.
 	buf.Write([]byte{0xff, 0xd8})
