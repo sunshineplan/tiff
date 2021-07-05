@@ -29,6 +29,8 @@ const (
 	dtShort    = 3
 	dtLong     = 4
 	dtRational = 5
+
+	dtUndefined = 7
 )
 
 // The length of one instance of each data type in bytes.
@@ -65,6 +67,9 @@ const (
 	tColorMap     = 320
 	tExtraSamples = 338
 	tSampleFormat = 339
+
+	// https://www.adobe.io/content/dam/udp/en/open/standards/tiff/TIFFphotoshop.pdf   page 7
+	tJPEG = 347
 )
 
 // Compression types (defined in various places in the spec and supplements).

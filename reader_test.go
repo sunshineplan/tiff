@@ -422,3 +422,11 @@ func benchmarkDecode(b *testing.B, filename string) {
 
 func BenchmarkDecodeCompressed(b *testing.B)   { benchmarkDecode(b, "video-001.tiff") }
 func BenchmarkDecodeUncompressed(b *testing.B) { benchmarkDecode(b, "video-001-uncompressed.tiff") }
+
+func TestJpeg(t *testing.T) {
+	f, _ := os.Open("testdata/bw-jpeg.tiff")
+	_, err := Decode(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
