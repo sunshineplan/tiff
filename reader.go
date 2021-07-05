@@ -463,8 +463,9 @@ func newDecoder(r io.Reader) (*decoder, error) {
 			return nil, err
 		}
 		if tag <= prevTag {
-			fmt.Fprint(io.Discard, "tags are not sorted in ascending order")
+			// Don't Check IFD tags order
 			// return nil, FormatError("tags are not sorted in ascending order")
+			fmt.Fprint(io.Discard, "tags are not sorted in ascending order")
 		}
 		prevTag = tag
 	}
