@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/jpeg"
 	"io"
 	"io/ioutil"
 	"math"
@@ -631,6 +632,7 @@ func Decode(r io.Reader) (img image.Image, err error) {
 		return nil, FormatError("inconsistent header")
 	}
 
+	nComponent := 3
 	imgRect := image.Rect(0, 0, d.config.Width, d.config.Height)
 	switch d.mode {
 	case mGray, mGrayInvert:
@@ -639,6 +641,7 @@ func Decode(r io.Reader) (img image.Image, err error) {
 		} else {
 			img = image.NewGray(imgRect)
 		}
+		nComponent = 1
 	case mPaletted:
 		img = image.NewPaletted(imgRect, d.palette)
 	case mNRGBA:
@@ -700,6 +703,13 @@ func Decode(r io.Reader) (img image.Image, err error) {
 				r := lzw.NewReader(io.NewSectionReader(d.r, offset, n), true)
 				d.buf, err = ioutil.ReadAll(r)
 				r.Close()
+			case cJPEG:
+				r := newJpegReader(nComponent, io.NewSectionReader(d.r, offset, n), n)
+				img, err = jpeg.Decode(r)
+				if err != nil {
+					return nil, err
+				}
+				return
 			case cDeflate, cDeflateOld:
 				var r io.ReadCloser
 				r, err = zlib.NewReader(io.NewSectionReader(d.r, offset, n))
