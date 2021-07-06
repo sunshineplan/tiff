@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/jpeg"
 	"io"
 	"io/ioutil"
@@ -56,7 +57,7 @@ type decoder struct {
 	v     uint32 // Buffer value for reading with arbitrary bit depths.
 	nbits uint   // Remaining number of bits in v.
 
-	tmp image.Image
+	tmp image.Image // Store temporary jpeg image
 }
 
 // firstVal returns the first uint of the features entry with the given tag,
@@ -425,6 +426,38 @@ func (d *decoder) decode(dst image.Image, xmin, ymin, xmax, ymax int) error {
 	return nil
 }
 
+// decodeJPEG decodes the jpeg data of an image.
+func (d *decoder) decodeJPEG(dst image.Image, xmin, ymin, xmax, ymax int) {
+	rMaxX := minInt(xmax, dst.Bounds().Max.X)
+	rMaxY := minInt(ymax, dst.Bounds().Max.Y)
+
+	var img draw.Image
+	switch d.mode {
+	case mGray, mGrayInvert:
+		if d.bpp == 16 {
+			img = dst.(*image.Gray16)
+		} else {
+			img = dst.(*image.Gray)
+		}
+	case mPaletted:
+		img = dst.(*image.Paletted)
+	case mRGB, mNRGBA, mRGBA:
+		if d.bpp == 16 {
+			img = dst.(*image.RGBA64)
+		} else {
+			img = dst.(*image.RGBA)
+		}
+	case mCMYK:
+		img = dst.(*image.CMYK)
+	}
+
+	for y := 0; y+ymin < rMaxY; y++ {
+		for x := 0; x+xmin < rMaxX; x++ {
+			img.Set(x+xmin, y+ymin, d.tmp.At(x, y))
+		}
+	}
+}
+
 func newDecoder(r io.Reader) (*decoder, error) {
 	d := &decoder{
 		r:        newReaderAt(r),
@@ -717,16 +750,22 @@ func Decode(r io.Reader) (img image.Image, err error) {
 				r.Close()
 			case cJPEG:
 				var buf bytes.Buffer
+				// structure should be SOI, DQT, DHT, EOI
+				// every strip use the same Huffman and Quantization Tables.
 				b := make([]byte, len(d.features[tJPEG]))
 				for i := range d.features[tJPEG] {
 					b[i] = uint8(d.features[tJPEG][i])
 				}
+				// write SOI, DQT, DHT.
 				buf.Write(b[:len(b)-2])
+				// structure should be SOI, SOF0, SOS, EOI.
 				b, err = io.ReadAll(io.NewSectionReader(d.r, offset, n))
 				if err != nil {
 					return nil, err
 				}
+				// write SOF0, SOS, EOI.
 				buf.Write(b[2:])
+				// then decode as jpeg image.
 				d.tmp, err = jpeg.Decode(&buf)
 				if err != nil {
 					return nil, err

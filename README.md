@@ -7,6 +7,9 @@ This package is an improved version of [x/image/tiff](https://github.com/golang/
 * Read/write support for the CMYK color model.
 
 
+* Skip check IFD tags order.
+* Read support for JPEG compressed images(Compression 7).
+
 ## Background
 
 Working on [pdfcpu](https://github.com/pdfcpu/pdfcpu) (a PDF processor) created a need for processing TIFF files and LZW compression in details beyond the standard library.
