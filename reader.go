@@ -55,6 +55,8 @@ type decoder struct {
 	off   int    // Current offset in buf.
 	v     uint32 // Buffer value for reading with arbitrary bit depths.
 	nbits uint   // Remaining number of bits in v.
+
+	tmp image.Image
 }
 
 // firstVal returns the first uint of the features entry with the given tag,
@@ -725,11 +727,10 @@ func Decode(r io.Reader) (img image.Image, err error) {
 					return nil, err
 				}
 				buf.Write(b[2:])
-				img, err = jpeg.Decode(&buf)
+				d.tmp, err = jpeg.Decode(&buf)
 				if err != nil {
 					return nil, err
 				}
-				return
 			case cDeflate, cDeflateOld:
 				var r io.ReadCloser
 				r, err = zlib.NewReader(io.NewSectionReader(d.r, offset, n))
@@ -751,12 +752,17 @@ func Decode(r io.Reader) (img image.Image, err error) {
 			ymin := j * blockHeight
 			xmax := xmin + blkW
 			ymax := ymin + blkH
-			err = d.decode(img, xmin, ymin, xmax, ymax)
-			if err != nil {
-				return nil, err
+			if d.firstVal(tCompression) == cJPEG {
+				d.decodeJPEG(img, xmin, ymin, xmax, ymax)
+			} else {
+				err = d.decode(img, xmin, ymin, xmax, ymax)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
+
 	return
 }
 
