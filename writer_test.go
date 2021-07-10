@@ -118,15 +118,12 @@ func averageDelta(m0, m1 image.Image) int64 {
 
 // TestRoundtrip3 tests that encoding and decoding an image use JPEG compression.
 func TestRoundtrip3(t *testing.T) {
-	roundtripTests := []struct {
-		filename string
-		err      error
-	}{
-		{"bw-uncompressed.tiff", nil},
-		{"video-001.tiff", UnsupportedError("color model")},
+	roundtripTests := []string{
+		"bw-jpeg.tiff",
+		"video-001-jpeg.tiff",
 	}
 	for _, rt := range roundtripTests {
-		img, err := openImage(rt.filename)
+		img, err := openImage(rt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -139,14 +136,11 @@ func TestRoundtrip3(t *testing.T) {
 
 		img2, err := Decode(&buffer{buf: out.Bytes()})
 		if err != nil {
-			if err.Error() != rt.err.Error() {
-				t.Fatal(err)
-			}
-		} else {
-			want := int64(6 << 8)
-			if got := averageDelta(img, img2); got > want {
-				t.Errorf("average delta too high; got %d, want <= %d", got, want)
-			}
+			t.Fatal(err)
+		}
+		want := int64(6 << 8)
+		if got := averageDelta(img, img2); got > want {
+			t.Errorf("average delta too high; got %d, want <= %d", got, want)
 		}
 	}
 }

@@ -421,6 +421,8 @@ func (d *decoder) decode(dst image.Image, xmin, ymin, xmax, ymax int) error {
 			}
 			copy(img.Pix[min:max], d.buf[i0:i1])
 		}
+	case mYCbCr:
+		return UnsupportedError("color model YCbCr not in JPEG compression")
 
 	}
 
@@ -428,7 +430,7 @@ func (d *decoder) decode(dst image.Image, xmin, ymin, xmax, ymax int) error {
 }
 
 // decodeJPEG decodes the jpeg data of an image.
-func (d *decoder) decodeJPEG(dst image.Image, xmin, ymin, xmax, ymax int) {
+func (d *decoder) decodeJPEG(dst image.Image, xmin, ymin, xmax, ymax int) (image.Image, error) {
 	rMaxX := minInt(xmax, dst.Bounds().Max.X)
 	rMaxY := minInt(ymax, dst.Bounds().Max.Y)
 
@@ -450,6 +452,14 @@ func (d *decoder) decodeJPEG(dst image.Image, xmin, ymin, xmax, ymax int) {
 		}
 	case mCMYK:
 		img = dst.(*image.CMYK)
+	case mYCbCr:
+		// only support for single segment.
+		if dst.Bounds() == d.tmp.Bounds() {
+			dst = d.tmp
+		} else {
+			return nil, UnsupportedError("color model YCbCr with multiple segments in JPEG compression")
+		}
+		return dst, nil
 	}
 
 	for y := 0; y+ymin < rMaxY; y++ {
@@ -457,6 +467,8 @@ func (d *decoder) decodeJPEG(dst image.Image, xmin, ymin, xmax, ymax int) {
 			img.Set(x+xmin, y+ymin, d.tmp.At(x, y))
 		}
 	}
+
+	return dst, nil
 }
 
 func newDecoder(r io.Reader) (*decoder, error) {
@@ -598,6 +610,12 @@ func newDecoder(r io.Reader) (*decoder, error) {
 			return nil, UnsupportedError(fmt.Sprintf("CMYK BitsPerSample of %v", d.bpp))
 		}
 		d.config.ColorModel = color.CMYKModel
+	case pYCbCr:
+		d.mode = mYCbCr
+		if d.bpp == 16 {
+			return nil, UnsupportedError(fmt.Sprintf("YCbCr BitsPerSample of %v", d.bpp))
+		}
+		d.config.ColorModel = color.YCbCrModel
 
 	default:
 		return nil, UnsupportedError("color model")
@@ -704,6 +722,8 @@ func Decode(r io.Reader) (img image.Image, err error) {
 		}
 	case mCMYK:
 		img = image.NewCMYK(imgRect)
+	case mYCbCr:
+		img = image.NewYCbCr(imgRect, 0)
 	}
 
 	// According to the spec, JPEGTables is an optional field. The purpose of it is to
@@ -811,12 +831,12 @@ func Decode(r io.Reader) (img image.Image, err error) {
 			xmax := xmin + blkW
 			ymax := ymin + blkH
 			if d.firstVal(tCompression) == cJPEG {
-				d.decodeJPEG(img, xmin, ymin, xmax, ymax)
+				img, err = d.decodeJPEG(img, xmin, ymin, xmax, ymax)
 			} else {
 				err = d.decode(img, xmin, ymin, xmax, ymax)
-				if err != nil {
-					return nil, err
-				}
+			}
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
