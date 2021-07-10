@@ -135,6 +135,7 @@ const (
 	LZW
 	CCITTGroup3
 	CCITTGroup4
+	JPEG
 )
 
 // specValue returns the compression type constant from the TIFF spec that
@@ -149,6 +150,8 @@ func (c CompressionType) specValue() uint32 {
 		return cG3
 	case CCITTGroup4:
 		return cG4
+	case JPEG:
+		return cJPEG
 	}
 	return cNone
 }

@@ -88,6 +88,69 @@ func TestRoundtrip2(t *testing.T) {
 	compare(t, m0, m1)
 }
 
+func delta(u0, u1 uint32) int64 {
+	d := int64(u0) - int64(u1)
+	if d < 0 {
+		return -d
+	}
+	return d
+}
+
+// averageDelta returns the average delta in RGB space. The two images must
+// have the same bounds.
+func averageDelta(m0, m1 image.Image) int64 {
+	b := m0.Bounds()
+	var sum, n int64
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			c0 := m0.At(x, y)
+			c1 := m1.At(x, y)
+			r0, g0, b0, _ := c0.RGBA()
+			r1, g1, b1, _ := c1.RGBA()
+			sum += delta(r0, r1)
+			sum += delta(g0, g1)
+			sum += delta(b0, b1)
+			n += 3
+		}
+	}
+	return sum / n
+}
+
+// TestRoundtrip3 tests that encoding and decoding an image use JPEG compression.
+func TestRoundtrip3(t *testing.T) {
+	roundtripTests := []struct {
+		filename string
+		err      error
+	}{
+		{"bw-uncompressed.tiff", nil},
+		{"video-001.tiff", UnsupportedError("color model")},
+	}
+	for _, rt := range roundtripTests {
+		img, err := openImage(rt.filename)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		out := new(bytes.Buffer)
+		err = Encode(out, img, &Options{Compression: JPEG})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		img2, err := Decode(&buffer{buf: out.Bytes()})
+		if err != nil {
+			if err.Error() != rt.err.Error() {
+				t.Fatal(err)
+			}
+		} else {
+			want := int64(6 << 8)
+			if got := averageDelta(img, img2); got > want {
+				t.Errorf("average delta too high; got %d, want <= %d", got, want)
+			}
+		}
+	}
+}
+
 func benchmarkEncode(b *testing.B, name string, pixelSize int) {
 	img, err := openImage(name)
 	if err != nil {

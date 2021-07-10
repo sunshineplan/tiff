@@ -8,7 +8,7 @@ This package is an improved version of [x/image/tiff](https://github.com/golang/
 
 
 * Skip check IFD tags order.
-* Read support for JPEG compressed images(Compression 7).
+* Read/write support for JPEG compressed images(Compression 7).
 
 ## Background
 

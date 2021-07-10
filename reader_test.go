@@ -422,11 +422,3 @@ func benchmarkDecode(b *testing.B, filename string) {
 
 func BenchmarkDecodeCompressed(b *testing.B)   { benchmarkDecode(b, "video-001.tiff") }
 func BenchmarkDecodeUncompressed(b *testing.B) { benchmarkDecode(b, "video-001-uncompressed.tiff") }
-
-// TestJpegCompression tests decoding an image that use JPEG Compression.
-func TestJPEGCompression(t *testing.T) {
-	_, err := load("bw-jpeg.tiff")
-	if err != nil {
-		t.Fatal(err)
-	}
-}
