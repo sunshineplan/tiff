@@ -57,7 +57,8 @@ type decoder struct {
 	v     uint32 // Buffer value for reading with arbitrary bit depths.
 	nbits uint   // Remaining number of bits in v.
 
-	tmp image.Image // Store temporary jpeg image
+	tJPEG []byte      // Store JPEGTables data
+	tmp   image.Image // Store temporary jpeg image
 }
 
 // firstVal returns the first uint of the features entry with the given tag,
@@ -705,6 +706,19 @@ func Decode(r io.Reader) (img image.Image, err error) {
 		img = image.NewCMYK(imgRect)
 	}
 
+	// According to the spec, JPEGTables is an optional field. The purpose of it is to
+	// predefine JPEG quantization and/or Huffman tables for subsequent use by JPEG image segments.
+	// Start with SOI marker and end with EOI marker.
+	if d.firstVal(tCompression) == cJPEG {
+		d.tJPEG = make([]byte, len(d.features[tJPEG]))
+		for i := range d.features[tJPEG] {
+			d.tJPEG[i] = uint8(d.features[tJPEG][i])
+		}
+		if l := len(d.tJPEG); l != 0 && l < 4 {
+			return nil, FormatError("bad JPEGTables field")
+		}
+	}
+
 	for i := 0; i < blocksAcross; i++ {
 		blkW := blockWidth
 		if !blockPadding && i == blocksAcross-1 && d.config.Width%blockWidth != 0 {
@@ -749,26 +763,31 @@ func Decode(r io.Reader) (img image.Image, err error) {
 				d.buf, err = ioutil.ReadAll(r)
 				r.Close()
 			case cJPEG:
-				var buf bytes.Buffer
-				// structure should be SOI, DQT, DHT, EOI
-				// every strip use the same Huffman and Quantization Tables.
-				b := make([]byte, len(d.features[tJPEG]))
-				for i := range d.features[tJPEG] {
-					b[i] = uint8(d.features[tJPEG][i])
-				}
-				// write SOI, DQT, DHT.
-				buf.Write(b[:len(b)-2])
-				// structure should be SOI, SOF0, SOS, EOI.
-				b, err = io.ReadAll(io.NewSectionReader(d.r, offset, n))
+				// JPEG image segment should start with SOI marker and end with EOI marker.
+				b, err := io.ReadAll(io.NewSectionReader(d.r, offset, n))
 				if err != nil {
 					return nil, err
 				}
-				// write SOF0, SOS, EOI.
-				buf.Write(b[2:])
-				// then decode as jpeg image.
-				d.tmp, err = jpeg.Decode(&buf)
+				if len(b) < 4 {
+					return nil, FormatError("bad JPEG image segment")
+				}
+				// Decode as a JPEG image.
+				d.tmp, err = jpeg.Decode(bytes.NewBuffer(b))
 				if err != nil {
-					return nil, err
+					var buf bytes.Buffer
+					if len(d.tJPEG) != 0 {
+						// Write JPEGTables data to buffer without EOI marker.
+						buf.Write(d.tJPEG[:len(d.tJPEG)-2])
+					} else {
+						return nil, err
+					}
+					// Write JPEG image segment to buffer without SOI marker.
+					// When this is done, buffer data should be a full JPEG format data.
+					buf.Write(b[2:])
+					d.tmp, err = jpeg.Decode(&buf)
+					if err != nil {
+						return nil, err
+					}
 				}
 			case cDeflate, cDeflateOld:
 				var r io.ReadCloser
